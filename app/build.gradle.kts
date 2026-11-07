@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,9 +7,12 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-val localProperties = java.util.Properties().apply {
-    val configFile = rootProject.file("local.properties")
-    if (configFile.exists()) configFile.inputStream().use { load(it) }
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { stream ->
+        localProperties.load(stream)
+    }
 }
 val supabaseUrl = localProperties.getProperty("SUPABASE_URL")
     ?: "https://ovbnjhdxsiqmrosnyojy.supabase.co"
@@ -37,7 +42,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 }
 
 dependencies {
