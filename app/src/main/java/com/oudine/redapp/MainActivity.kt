@@ -4,13 +4,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ChatBubble
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,11 +30,14 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.coroutines.launch
 
-private val Ink = Color(0xFF07111C)
-private val Panel = Color(0xFF101F2D)
-private val Green = Color(0xFF24D18B)
-private val Blue = Color(0xFF2388F4)
-private val Soft = Color(0xFFB7C7D8)
+private val Night = Color(0xFF060B1E)
+private val NightBlue = Color(0xFF0A1230)
+private val CardBlue = Color(0xFF101B3B)
+private val Red = Color(0xFFFF2D3F)
+private val Cyan = Color(0xFF00D4FF)
+private val Blue = Color(0xFF1E7BFF)
+private val Muted = Color(0xFF9AA7CC)
+private val White = Color(0xFFF8FAFF)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,12 +50,12 @@ class MainActivity : ComponentActivity() {
 private fun RedAppTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Green,
-            secondary = Blue,
-            background = Ink,
-            surface = Panel,
-            onBackground = Color.White,
-            onSurface = Color.White
+            primary = Red,
+            secondary = Cyan,
+            background = Night,
+            surface = CardBlue,
+            onBackground = White,
+            onSurface = White
         ),
         content = content
     )
@@ -67,11 +73,11 @@ private fun RedAppRoot() {
 
     Box(
         Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Ink, Color(0xFF0A1D2C), Color(0xFF07111C)))
+            Brush.verticalGradient(listOf(NightBlue, Night, Color(0xFF080F29)))
         )
     ) {
         if (signedIn) {
-            HomeScreen(onSignOut = {
+            MainShell(onSignOut = {
                 scope.launch {
                     runCatching { SupabaseProvider.client.auth.signOut() }
                     signedIn = false
@@ -82,35 +88,34 @@ private fun RedAppRoot() {
                 Modifier.fillMaxWidth().align(Alignment.Center).padding(horizontal = 26.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("œ", fontSize = 68.sp, fontWeight = FontWeight.Black, color = Green)
-                Text("RedApp", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("from Oudine", color = Soft, fontSize = 14.sp)
+                Box(
+                    Modifier.size(86.dp).background(
+                        Brush.linearGradient(listOf(Blue, Cyan)), RoundedCornerShape(26.dp)
+                    ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("œ", color = White, fontSize = 55.sp, fontWeight = FontWeight.Black)
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("RedApp", color = White, fontSize = 36.sp, fontWeight = FontWeight.Black)
+                Text("PRIVATE CHAT • FROM OUDINE", color = Muted, fontSize = 11.sp, letterSpacing = 2.sp)
                 Spacer(Modifier.height(34.dp))
                 Text(if (isSignUp) "Create your account" else "Welcome back",
-                    fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(18.dp))
-                OutlinedTextField(
-                    value = email, onValueChange = { email = it },
-                    label = { Text("Email") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    color = White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Text(if (isSignUp) "Join your people on RedApp" else "Your conversations are waiting",
+                    color = Muted, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 22.dp))
+                AuthField(email, { email = it }, "Email", KeyboardType.Email)
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = password, onValueChange = { password = it },
-                    label = { Text("Password") }, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                AuthField(password, { password = it }, "Password", KeyboardType.Password, true)
                 Spacer(Modifier.height(18.dp))
                 Button(
                     onClick = {
                         if (!SupabaseProvider.isConfigured) {
-                            message = "Add your Supabase publishable key in local.properties first."
+                            message = "Supabase setup is still required."
                             return@Button
                         }
                         if (email.isBlank() || password.length < 6) {
-                            message = "Enter a valid email and a password of at least 6 characters."
+                            message = "Enter your email and a password with at least 6 characters."
                             return@Button
                         }
                         scope.launch {
@@ -131,31 +136,40 @@ private fun RedAppRoot() {
                             }
                             busy = false
                             result.onSuccess {
-                                if (isSignUp) message = "Account request sent. Check your email if confirmation is enabled."
-                                else signedIn = true
+                                if (isSignUp) {
+                                    signedIn = true
+                                } else {
+                                    signedIn = true
+                                }
                             }.onFailure {
-                                message = it.message ?: "Authentication failed. Please try again."
+                                message = it.message ?: "Couldn't continue. Please try again."
                             }
                         }
                     },
                     enabled = !busy,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Ink)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Red,
+                        contentColor = White
+                    )
                 ) {
-                    if (busy) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else Text(if (isSignUp) "Create account" else "Sign in", fontWeight = FontWeight.Bold)
+                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = White, strokeWidth = 2.dp)
+                    else Text(if (isSignUp) "CREATE ACCOUNT" else "SIGN IN", fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
                 }
                 TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
-                    Text(if (isSignUp) "Already have an account? Sign in" else "New to RedApp? Create account")
+                    Text(
+                        if (isSignUp) "Already have an account? Sign in" else "New to RedApp? Create account",
+                        color = Cyan
+                    )
                 }
                 if (message.isNotBlank()) {
-                    Text(message, color = if (message.startsWith("Account")) Green else Soft,
+                    Text(message, color = Color(0xFFFFA6AF), fontSize = 13.sp,
                         modifier = Modifier.padding(top = 8.dp))
                 }
                 if (!SupabaseProvider.isConfigured) {
-                    Text("Supabase setup required", color = Blue, fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 12.dp))
+                    Text("Connect Supabase to enable accounts", color = Muted, fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 14.dp))
                 }
             }
         }
@@ -163,41 +177,217 @@ private fun RedAppRoot() {
 }
 
 @Composable
-private fun HomeScreen(onSignOut: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("RedApp", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Text("Stay close. Stay connected.", color = Soft)
+private fun AuthField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    keyboard: KeyboardType,
+    secret: Boolean = false
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+        visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(15.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Cyan,
+            unfocusedBorderColor = Color(0xFF344266),
+            focusedLabelColor = Cyan,
+            unfocusedLabelColor = Muted,
+            cursorColor = Cyan
+        )
+    )
+}
+
+private enum class AppTab(val label: String) { Chats("Chats"), Groups("Groups"), Connect("Connect"), Profile("Profile") }
+
+@Composable
+private fun MainShell(onSignOut: () -> Unit) {
+    var selected by remember { mutableStateOf(AppTab.Chats) }
+    Scaffold(
+        containerColor = Color.Transparent,
+        bottomBar = {
+            NavigationBar(containerColor = Color(0xFF090F25), contentColor = White) {
+                val tabs = listOf(
+                    AppTab.Chats to Icons.Rounded.ChatBubble,
+                    AppTab.Groups to Icons.Rounded.Groups,
+                    AppTab.Connect to Icons.Rounded.PersonAdd,
+                    AppTab.Profile to Icons.Rounded.Person
+                )
+                tabs.forEach { (tab, icon) ->
+                    NavigationBarItem(
+                        selected = selected == tab,
+                        onClick = { selected = tab },
+                        icon = { Icon(icon, contentDescription = tab.label) },
+                        label = { Text(tab.label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Cyan,
+                            selectedTextColor = Cyan,
+                            indicatorColor = Color(0xFF14264B),
+                            unselectedIconColor = Muted,
+                            unselectedTextColor = Muted
+                        )
+                    )
+                }
             }
-            Text("œ", fontSize = 34.sp, color = Green, fontWeight = FontWeight.Black)
         }
-        Spacer(Modifier.height(32.dp))
-        FeatureTile(Icons.Rounded.ChatBubble, "Messages", "Your private conversations")
-        FeatureTile(Icons.Rounded.Groups, "Groups", "Bring friends together")
-        FeatureTile(Icons.Rounded.PersonAdd, "Connect", "Phone number • QR code • RedApp ID")
-        Spacer(Modifier.weight(1f))
-        Text("More RedApp features are being connected next.", color = Soft)
-        OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
-            Text("Sign out")
+    ) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding)
+                .background(Brush.verticalGradient(listOf(NightBlue, Night)))
+                .padding(horizontal = 20.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 22.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("RedApp", color = White, fontSize = 29.sp, fontWeight = FontWeight.Black)
+                    Text("Private chat that starts with a scan", color = Muted, fontSize = 12.sp)
+                }
+                Box(
+                    Modifier.size(44.dp).background(
+                        Brush.linearGradient(listOf(Blue, Cyan)), CircleShape
+                    ),
+                    contentAlignment = Alignment.Center
+                ) { Text("œ", color = White, fontSize = 28.sp, fontWeight = FontWeight.Black) }
+            }
+            when (selected) {
+                AppTab.Chats -> ChatsPage()
+                AppTab.Groups -> SimplePage("Your groups", "Bring your people together in private groups.", Icons.Rounded.Groups)
+                AppTab.Connect -> ConnectPage()
+                AppTab.Profile -> ProfilePage(onSignOut)
+            }
         }
     }
 }
 
 @Composable
-private fun FeatureTile(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        shape = RoundedCornerShape(20.dp)
-    ) {
-        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = Green, modifier = Modifier.size(28.dp))
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                Text(subtitle, color = Soft, fontSize = 13.sp)
+private fun ChatsPage() {
+    var query by remember { mutableStateOf("") }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+        Text("Messages", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        IconButton(onClick = {}) { Icon(Icons.Rounded.Edit, contentDescription = "New chat", tint = Cyan) }
+    }
+    OutlinedTextField(
+        value = query, onValueChange = { query = it },
+        modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp),
+        placeholder = { Text("Search conversations", color = Muted) },
+        leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Muted) },
+        singleLine = true, shape = RoundedCornerShape(15.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Cyan, unfocusedBorderColor = Color(0xFF29375B),
+            focusedTextColor = White, unfocusedTextColor = White
+        )
+    )
+    Text("RECENT", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp,
+        modifier = Modifier.padding(bottom = 10.dp))
+    val demo = listOf(
+        Triple("Your RedApp space", "Start by connecting with a friend", "Now"),
+        Triple("Private conversations", "Your chats will appear here", ""),
+        Triple("RedApp groups", "Create a group with your people", "")
+    ).filter { it.first.contains(query, true) || it.second.contains(query, true) }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(demo) { item ->
+            Row(
+                Modifier.fillMaxWidth().background(CardBlue, RoundedCornerShape(18.dp))
+                    .border(1.dp, Color(0xFF25365C), RoundedCornerShape(18.dp)).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(48.dp).background(
+                    Brush.linearGradient(listOf(Blue, Cyan)), CircleShape
+                ), contentAlignment = Alignment.Center) {
+                    Text(item.first.take(1), color = White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(item.first, color = White, fontWeight = FontWeight.SemiBold)
+                    Text(item.second, color = Muted, fontSize = 12.sp)
+                }
+                Text(item.third, color = Muted, fontSize = 11.sp)
             }
         }
+    }
+    Spacer(Modifier.height(16.dp))
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF111F42)),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Lock, null, tint = Cyan)
+            Spacer(Modifier.width(10.dp))
+            Text("Your private space. Connect with someone to start chatting.", color = Muted, fontSize = 13.sp)
+        }
+    }
+}
+
+@Composable
+private fun SimplePage(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Text(title, color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(14.dp))
+    Card(colors = CardDefaults.cardColors(containerColor = CardBlue), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, null, tint = Cyan, modifier = Modifier.size(42.dp))
+            Spacer(Modifier.height(12.dp))
+            Text(subtitle, color = Muted)
+        }
+    }
+}
+
+@Composable
+private fun ConnectPage() {
+    Text("Connect with friends", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+    Text("Choose how you want to find someone.", color = Muted, fontSize = 13.sp,
+        modifier = Modifier.padding(top = 5.dp, bottom = 18.dp))
+    listOf(
+        Triple(Icons.Rounded.Phone, "Phone number", "Find someone using their number"),
+        Triple(Icons.Rounded.QrCode2, "Scan QR code", "Connect instantly by scanning"),
+        Triple(Icons.Rounded.Tag, "RedApp ID", "Enter their unique RedApp ID")
+    ).forEach { item ->
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clickable { },
+            colors = CardDefaults.cardColors(containerColor = CardBlue),
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(item.first, null, tint = Cyan, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(item.second, color = White, fontWeight = FontWeight.SemiBold)
+                    Text(item.third, color = Muted, fontSize = 12.sp)
+                }
+                Icon(Icons.Rounded.ChevronRight, null, tint = Muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfilePage(onSignOut: () -> Unit) {
+    Text("Your profile", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(18.dp))
+    Card(colors = CardDefaults.cardColors(containerColor = CardBlue), shape = RoundedCornerShape(20.dp)) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(54.dp).background(Brush.linearGradient(listOf(Blue, Cyan)), CircleShape),
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Person, null, tint = White, modifier = Modifier.size(30.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text("RedApp member", color = White, fontWeight = FontWeight.Bold)
+                Text("Oudine account", color = Muted, fontSize = 12.sp)
+            }
+        }
+    }
+    Spacer(Modifier.height(20.dp))
+    OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = Red)) {
+        Icon(Icons.Rounded.Logout, null)
+        Spacer(Modifier.width(8.dp))
+        Text("Sign out")
     }
 }
