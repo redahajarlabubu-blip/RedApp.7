@@ -63,150 +63,14 @@ private fun RedAppTheme(content: @Composable () -> Unit) {
 
 @Composable
 private fun RedAppRoot() {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isSignUp by remember { mutableStateOf(false) }
-    var signedIn by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope()
-
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(NightBlue, Night, Color(0xFF080F29)))
-        )
-    ) {
-        if (signedIn) {
-            MainShell(onSignOut = {
-                scope.launch {
-                    runCatching { SupabaseProvider.client.auth.signOut() }
-                    signedIn = false
-                }
-            })
-        } else {
-            Column(
-                Modifier.fillMaxWidth().align(Alignment.Center).padding(horizontal = 26.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    Modifier.size(86.dp).background(
-                        Brush.linearGradient(listOf(Blue, Cyan)), RoundedCornerShape(26.dp)
-                    ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("œ", color = White, fontSize = 55.sp, fontWeight = FontWeight.Black)
-                }
-                Spacer(Modifier.height(16.dp))
-                Text("RedApp", color = White, fontSize = 36.sp, fontWeight = FontWeight.Black)
-                Text("PRIVATE CHAT • FROM OUDINE", color = Muted, fontSize = 11.sp, letterSpacing = 2.sp)
-                Spacer(Modifier.height(34.dp))
-                Text(if (isSignUp) "Create your account" else "Welcome back",
-                    color = White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-                Text(if (isSignUp) "Join your people on RedApp" else "Your conversations are waiting",
-                    color = Muted, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 22.dp))
-                AuthField(email, { email = it }, "Email", KeyboardType.Email)
-                Spacer(Modifier.height(12.dp))
-                AuthField(password, { password = it }, "Password", KeyboardType.Password, true)
-                Spacer(Modifier.height(18.dp))
-                Button(
-                    onClick = {
-                        if (!SupabaseProvider.isConfigured) {
-                            message = "Supabase setup is still required."
-                            return@Button
-                        }
-                        if (email.isBlank() || password.length < 6) {
-                            message = "Enter your email and a password with at least 6 characters."
-                            return@Button
-                        }
-                        scope.launch {
-                            busy = true
-                            message = ""
-                            val result = runCatching {
-                                if (isSignUp) {
-                                    SupabaseProvider.client.auth.signUpWith(Email) {
-                                        this.email = email.trim()
-                                        this.password = password
-                                    }
-                                } else {
-                                    SupabaseProvider.client.auth.signInWith(Email) {
-                                        this.email = email.trim()
-                                        this.password = password
-                                    }
-                                }
-                            }
-                            busy = false
-                            result.onSuccess {
-                                if (isSignUp) {
-                                    signedIn = true
-                                } else {
-                                    signedIn = true
-                                }
-                            }.onFailure {
-                                message = it.message ?: "Couldn't continue. Please try again."
-                            }
-                        }
-                    },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Red,
-                        contentColor = White
-                    )
-                ) {
-                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = White, strokeWidth = 2.dp)
-                    else Text(if (isSignUp) "CREATE ACCOUNT" else "SIGN IN", fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
-                }
-                TextButton(onClick = { isSignUp = !isSignUp; message = "" }) {
-                    Text(
-                        if (isSignUp) "Already have an account? Sign in" else "New to RedApp? Create account",
-                        color = Cyan
-                    )
-                }
-                if (message.isNotBlank()) {
-                    Text(message, color = Color(0xFFFFA6AF), fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 8.dp))
-                }
-                if (!SupabaseProvider.isConfigured) {
-                    Text("Connect Supabase to enable accounts", color = Muted, fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 14.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AuthField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    keyboard: KeyboardType,
-    secret: Boolean = false
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboard),
-        visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(15.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Cyan,
-            unfocusedBorderColor = Color(0xFF344266),
-            focusedLabelColor = Cyan,
-            unfocusedLabelColor = Muted,
-            cursorColor = Cyan
-        )
-    )
+    // Guest-first launch: no email, password, sign-up or verification screen.
+    MainShell()
 }
 
 private enum class AppTab(val label: String) { Chats("Chats"), Groups("Groups"), Connect("Connect"), Profile("Profile") }
 
 @Composable
-private fun MainShell(onSignOut: () -> Unit) {
+private fun MainShell() {
     var selected by remember { mutableStateOf(AppTab.Chats) }
     Scaffold(
         containerColor = Color.Transparent,
@@ -260,7 +124,7 @@ private fun MainShell(onSignOut: () -> Unit) {
                 AppTab.Chats -> ChatsPage()
                 AppTab.Groups -> SimplePage("Your groups", "Bring your people together in private groups.", Icons.Rounded.Groups)
                 AppTab.Connect -> ConnectPage()
-                AppTab.Profile -> ProfilePage(onSignOut)
+                AppTab.Profile -> ProfilePage()
             }
         }
     }
@@ -367,7 +231,7 @@ private fun ConnectPage() {
 }
 
 @Composable
-private fun ProfilePage(onSignOut: () -> Unit) {
+private fun ProfilePage() {
     Text("Your profile", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(18.dp))
     Card(colors = CardDefaults.cardColors(containerColor = CardBlue), shape = RoundedCornerShape(20.dp)) {
@@ -383,11 +247,6 @@ private fun ProfilePage(onSignOut: () -> Unit) {
             }
         }
     }
-    Spacer(Modifier.height(20.dp))
-    OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = Red)) {
-        Icon(Icons.Rounded.Logout, null)
-        Spacer(Modifier.width(8.dp))
-        Text("Sign out")
-    }
+    Spacer(Modifier.height(12.dp))
+    Text("Guest mode • No email or verification required", color = Muted, fontSize = 12.sp)
 }
