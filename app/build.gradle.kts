@@ -21,7 +21,7 @@ val supabasePublishableKey = localProperties.getProperty("SUPABASE_PUBLISHABLE_K
 
 android {
     namespace = "com.oudine.redapp"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.oudine.redapp"
