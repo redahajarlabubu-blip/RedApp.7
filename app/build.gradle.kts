@@ -17,7 +17,7 @@ if (localPropertiesFile.exists()) {
 val supabaseUrl = localProperties.getProperty("SUPABASE_URL")
     ?: "https://ovbnjhdxsiqmrosnyojy.supabase.co"
 val supabasePublishableKey = localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY")
-    ?: "YOUR_SUPABASE_PUBLISHABLE_KEY"
+    ?: "sb_publishable_YfQA3Xu0PSsWhVxjgkCdDQ_S1ueFaaR"
 
 android {
     namespace = "com.oudine.redapp"
