@@ -467,7 +467,7 @@ private fun CallsPage() {
                     scope.launch {
                         busy = true
                         try {
-                            val caller = SupabaseProvider.client.auth.currentUserOrNull()?.id
+                            val caller = SupabaseProvider.client.auth.currentSessionOrNull()?.user?.id
                                 ?: error("Sign in again to make a call.")
                             require(recipient.matches(Regex("^[0-9a-fA-F-]{36}$")) && recipient != caller) {
                                 "Enter a valid friend's RedApp user ID."
