@@ -95,6 +95,7 @@ private fun MainShell(onSignOut: () -> Unit) {
                 val tabs = listOf(
                     AppTab.Chats to Icons.Rounded.ChatBubble,
                     AppTab.Groups to Icons.Rounded.Groups,
+                    AppTab.Calls to Icons.Rounded.Call,
                     AppTab.Connect to Icons.Rounded.PersonAdd,
                     AppTab.Calls to Icons.Rounded.Call,
                     AppTab.Profile to Icons.Rounded.Person
@@ -140,6 +141,7 @@ private fun MainShell(onSignOut: () -> Unit) {
             when (selected) {
                 AppTab.Chats -> ChatsPage()
                 AppTab.Groups -> SimplePage("Your groups", "Bring your people together in private groups.", Icons.Rounded.Groups)
+                AppTab.Calls -> CallsPage()
                 AppTab.Connect -> ConnectPage()
                 AppTab.Calls -> CallsPage()
                 AppTab.Profile -> ProfilePage(onSignOut)
@@ -343,4 +345,155 @@ private fun ProfilePage(onSignOut: () -> Unit) {
         },
         modifier = Modifier.fillMaxWidth()
     ) { Text("Sign out") }
+}
+
+
+@Composable
+private fun EmailAuthScreen(
+    onAuthenticated: () -> Unit,
+    configurationError: String? = null
+) {
+    val scope = rememberCoroutineScope()
+    var email by remember { mutableStateOf("") }
+    var token by remember { mutableStateOf("") }
+    var sent by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf(configurationError.orEmpty()) }
+
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(NightBlue, Night))),
+        contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("RedApp", color = White, fontSize = 32.sp, fontWeight = FontWeight.Black)
+            Text("Secure account verification", color = Muted, fontSize = 13.sp)
+            Spacer(Modifier.height(24.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = CardBlue), shape = RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                    Text(if (sent) "Check your email" else "Sign in or create account",
+                        color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (sent) "Enter the one-time code sent to $email."
+                        else "RedApp sends a one-time verification code to your email. No phone number required.",
+                        color = Muted, fontSize = 13.sp)
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(value = email, onValueChange = { email = it.trim() },
+                        modifier = Modifier.fillMaxWidth(), enabled = !sent && !busy,
+                        label = { Text("Email address") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                    if (sent) {
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(value = token, onValueChange = { token = it.filter(Char::isDigit).take(8) },
+                            modifier = Modifier.fillMaxWidth(), enabled = !busy,
+                            label = { Text("Verification code") }, singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    }
+                    if (message.isNotBlank()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(message, color = if (message.startsWith("Error")) Color(0xFFFF8A8A) else Cyan, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                message = ""
+                                try {
+                                    if (!sent) {
+                                        require(email.contains("@") && email.contains(".")) { "Enter a valid email address." }
+                                        SupabaseProvider.client.auth.signInWith(OTP) { this.email = email }
+                                        sent = true
+                                        message = "Verification code sent. Check your inbox and spam folder."
+                                    } else {
+                                        require(token.length >= 6) { "Enter the code from your email." }
+                                        SupabaseProvider.client.auth.verifyEmailOtp(
+                                            type = OtpType.Email.EMAIL, email = email, token = token
+                                        )
+                                        onAuthenticated()
+                                    }
+                                } catch (e: Exception) {
+                                    message = "Error: ${e.message ?: "Please try again."}"
+                                } finally { busy = false }
+                            }
+                        },
+                        enabled = !busy && configurationError == null &&
+                            (if (sent) token.length >= 6 else email.isNotBlank()),
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Red)
+                    ) {
+                        if (busy) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = White)
+                        else Text(if (sent) "Verify and continue" else "Send email code")
+                    }
+                    if (sent) TextButton(onClick = { sent = false; token = ""; message = "" }) {
+                        Text("Change email", color = Cyan)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Serializable
+private data class RedAppCallInvite(
+    @SerialName("caller_id") val callerId: String,
+    @SerialName("callee_id") val calleeId: String,
+    @SerialName("call_type") val callType: String,
+    val status: String = "ringing"
+)
+
+@Composable
+private fun CallsPage() {
+    val scope = rememberCoroutineScope()
+    var recipient by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf("audio") }
+    var busy by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("Start an internet call using your friend's RedApp user ID.") }
+
+    Text("Calls", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+    Text("Voice and video call invitations", color = Muted, fontSize = 13.sp,
+        modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
+    Card(colors = CardDefaults.cardColors(containerColor = CardBlue), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            OutlinedTextField(value = recipient, onValueChange = { recipient = it.trim() },
+                modifier = Modifier.fillMaxWidth(), label = { Text("Friend's RedApp user ID") }, singleLine = true)
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = type == "audio", onClick = { type = "audio" },
+                    label = { Text("Voice") }, leadingIcon = { Icon(Icons.Rounded.Call, null) })
+                FilterChip(selected = type == "video", onClick = { type = "video" },
+                    label = { Text("Video") }, leadingIcon = { Icon(Icons.Rounded.Videocam, null) })
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        try {
+                            val caller = SupabaseProvider.client.auth.currentUserOrNull()?.id
+                                ?: error("Sign in again to make a call.")
+                            require(recipient.matches(Regex("^[0-9a-fA-F-]{36}$")) && recipient != caller) {
+                                "Enter a valid friend's RedApp user ID."
+                            }
+                            SupabaseProvider.client.postgrest["calls"].insert(
+                                RedAppCallInvite(callerId = caller, calleeId = recipient, callType = type)
+                            )
+                            status = "Call invitation saved on the RedApp server. Live audio/video media is not connected yet."
+                        } catch (e: Exception) {
+                            status = "Error: ${e.message ?: "Could not create call."}"
+                        } finally { busy = false }
+                    }
+                },
+                enabled = !busy && recipient.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Red)
+            ) {
+                if (busy) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = White)
+                else Icon(Icons.Rounded.Call, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Create call invitation")
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(status, color = if (status.startsWith("Error")) Color(0xFFFF8A8A) else Muted, fontSize = 12.sp)
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    Text("Calls use Wi-Fi or mobile data, not paid phone minutes.", color = Cyan, fontSize = 12.sp)
 }
