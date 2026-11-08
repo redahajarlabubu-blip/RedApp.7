@@ -28,10 +28,10 @@ import com.oudine.redapp.data.SupabaseProvider
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.providers.builtin.OTP
-import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.functions.functions
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 
 private val Night = Color(0xFF060B1E)
 private val NightBlue = Color(0xFF0A1230)
@@ -368,14 +368,6 @@ private fun EmailAuthScreen(
     }
 }
 
-@Serializable
-private data class RedAppCallInvite(
-    @SerialName("caller_id") val callerId: String,
-    @SerialName("callee_id") val calleeId: String,
-    @SerialName("call_type") val callType: String,
-    val status: String = "ringing"
-)
-
 @Composable
 private fun CallsPage() {
     val scope = rememberCoroutineScope()
@@ -404,15 +396,17 @@ private fun CallsPage() {
                     scope.launch {
                         busy = true
                         try {
-                            val caller = SupabaseProvider.client.auth.currentSessionOrNull()?.user?.id
-                                ?: error("Sign in again to make a call.")
-                            require(recipient.matches(Regex("^[0-9a-fA-F-]{36}$")) && recipient != caller) {
-                                "Enter a valid friend's RedApp user ID."
+                            require(recipient.matches(Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"))) {
+                                "Enter a valid friend's RedApp user UUID."
                             }
-                            SupabaseProvider.client.postgrest["calls"].insert(
-                                RedAppCallInvite(callerId = caller, calleeId = recipient, callType = type)
+                            SupabaseProvider.client.functions.invoke(
+                                function = "call-invite",
+                                body = buildJsonObject {
+                                    put("callee_id", recipient)
+                                    put("call_type", type)
+                                }
                             )
-                            status = "Call invitation saved on the RedApp server. Live audio/video media is not connected yet."
+                            status = "Call invitation sent to the RedApp server. Live audio/video media is the next step."
                         } catch (e: Exception) {
                             status = "Error: ${e.message ?: "Could not create call."}"
                         } finally { busy = false }
