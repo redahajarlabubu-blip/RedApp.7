@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -21,13 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oudine.redapp.data.SupabaseProvider
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.coroutines.launch
 
 private val Night = Color(0xFF060B1E)
@@ -63,14 +59,34 @@ private fun RedAppTheme(content: @Composable () -> Unit) {
 
 @Composable
 private fun RedAppRoot() {
-    // Guest-first launch: no email, password, sign-up or verification screen.
-    MainShell()
+    var authenticated by remember { mutableStateOf(false) }
+    var checkingSession by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        authenticated = try {
+            SupabaseProvider.client.auth.currentSessionOrNull() != null
+        } catch (_: Throwable) {
+            false
+        }
+        checkingSession = false
+    }
+
+    when {
+        checkingSession -> Box(
+            Modifier.fillMaxSize().background(Night),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator(color = Cyan) }
+        authenticated -> MainShell(onSignOut = { authenticated = false })
+        else -> EmailVerificationScreen(onVerified = { authenticated = true })
+    }
 }
 
-private enum class AppTab(val label: String) { Chats("Chats"), Groups("Groups"), Connect("Connect"), Profile("Profile") }
+private enum class AppTab(val label: String) {
+    Chats("Chats"), Groups("Groups"), Connect("Connect"), Calls("Calls"), Profile("Profile")
+}
 
 @Composable
-private fun MainShell() {
+private fun MainShell(onSignOut: () -> Unit) {
     var selected by remember { mutableStateOf(AppTab.Chats) }
     Scaffold(
         containerColor = Color.Transparent,
@@ -80,6 +96,7 @@ private fun MainShell() {
                     AppTab.Chats to Icons.Rounded.ChatBubble,
                     AppTab.Groups to Icons.Rounded.Groups,
                     AppTab.Connect to Icons.Rounded.PersonAdd,
+                    AppTab.Calls to Icons.Rounded.Call,
                     AppTab.Profile to Icons.Rounded.Person
                 )
                 tabs.forEach { (tab, icon) ->
@@ -124,7 +141,8 @@ private fun MainShell() {
                 AppTab.Chats -> ChatsPage()
                 AppTab.Groups -> SimplePage("Your groups", "Bring your people together in private groups.", Icons.Rounded.Groups)
                 AppTab.Connect -> ConnectPage()
-                AppTab.Profile -> ProfilePage()
+                AppTab.Calls -> CallsPage()
+                AppTab.Profile -> ProfilePage(onSignOut)
             }
         }
     }
@@ -231,7 +249,76 @@ private fun ConnectPage() {
 }
 
 @Composable
-private fun ProfilePage() {
+private fun CallsPage() {
+    val scope = rememberCoroutineScope()
+    var recipientId by remember { mutableStateOf("") }
+    var callType by remember { mutableStateOf("audio") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("Enter your friend's Supabase user ID to create a call invitation.") }
+    var isError by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Calls", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Text("Internet voice and video call invitations", color = Muted, fontSize = 13.sp)
+        Card(colors = CardDefaults.cardColors(containerColor = CardBlue), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = recipientId,
+                    onValueChange = { recipientId = it.trim() },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Friend's account UUID") },
+                    placeholder = { Text("Paste the recipient user ID") },
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = callType == "audio", onClick = { callType = "audio" }, label = { Text("Voice") })
+                    FilterChip(selected = callType == "video", onClick = { callType = "video" }, label = { Text("Video") })
+                }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            isError = false
+                            try {
+                                val uuid = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
+                                require(uuid.matches(recipientId)) { "Enter a valid account UUID." }
+                                SupabaseProvider.client.functions.invoke(
+                                    function = "call-invite",
+                                    body = kotlinx.serialization.json.buildJsonObject {
+                                        put("callee_id", recipientId)
+                                        put("call_type", callType)
+                                    }
+                                )
+                                message = "Call invitation created. The live audio/video connection is the next integration step."
+                            } catch (error: Throwable) {
+                                isError = true
+                                message = error.message ?: "Could not create the call invitation."
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    enabled = !busy
+                ) {
+                    if (busy) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = White, strokeWidth = 2.dp)
+                    else {
+                        Icon(if (callType == "audio") Icons.Rounded.Call else Icons.Rounded.Videocam, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (callType == "audio") "Start voice call" else "Start video call")
+                    }
+                }
+                Text(message, color = if (isError) Color(0xFFFF7A88) else Muted, fontSize = 12.sp)
+            }
+        }
+        Text("Calls use the internet. Your mobile operator's voice minutes are not used.", color = Muted, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun ProfilePage(onSignOut: () -> Unit) {
+    val scope = rememberCoroutineScope()
     Text("Your profile", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(18.dp))
     Card(colors = CardDefaults.cardColors(containerColor = CardBlue), shape = RoundedCornerShape(20.dp)) {
@@ -243,10 +330,17 @@ private fun ProfilePage() {
             Spacer(Modifier.width(14.dp))
             Column {
                 Text("RedApp member", color = White, fontWeight = FontWeight.Bold)
-                Text("Oudine account", color = Muted, fontSize = 12.sp)
+                Text("Verified email account", color = Muted, fontSize = 12.sp)
             }
         }
     }
     Spacer(Modifier.height(12.dp))
-    Text("Guest mode • No email or verification required", color = Muted, fontSize = 12.sp)
+    OutlinedButton(
+        onClick = {
+            scope.launch {
+                try { SupabaseProvider.client.auth.signOut() } finally { onSignOut() }
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) { Text("Sign out") }
 }
